@@ -1,0 +1,1166 @@
+---
+title: "Projet_MC_2019"
+author: "Lesueur and Ibnouzahir"
+date: "11 decembre 2019"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+```{r,warning=FALSE}
+rm(list=ls())
+#options(Encoding='UTF-8')
+require(evd)
+require(microbenchmark)
+source('Mc9.R')
+```
+
+#Exercice 1
+
+##Partie 1
+
+###q1)
+
+Nous allons simuler la loi de Gumbel en utilisant la methode de la fonction inverse.
+
+Calculons d'abord F la fonction de repartition d'une loi de Gumbel.
+
+La densite (par rapport a la mesure de Lebesgue) vaut:
+
+$f(x):=\frac{1}{\beta}e^{-e^{-\frac{x-\mu}{\beta}}}e^{-\frac{x-\mu}{\beta}}$
+
+Donc:
+
+$F(t)=\int_{-\infty}^{t} f(x) dx$
+
+On a : $f(x)=\frac{d}{dx}e^{-e^{-\frac{x-\mu}{\beta}}}$
+
+$F(t)=\left [e^{-e^{-\frac{x-\mu}{\beta}}} \right ]_{-\infty}^{t}$
+
+$F(t)=e^{-e^{-\frac{t-\mu}{\beta}}}$
+
+On sait que F est continue (et meme derivable...) et croissante: c'est donc une bijection de $\mathbb{R}$ dans ]0,1[ elle est en particulier inversible. Calculons donc sa fonction reciproque.
+
+On resoud: $F(x)=y$ pour tout x dans $\mathbb{R}$ et y dans ]0,1[
+
+$e^{-e^{-\frac{x-\mu}{\beta}}}=y$
+
+$-e^{-\frac{x-\mu}{\beta}}=log(y)$
+
+$-\frac{x-\mu}{\beta}=log(-log(y))$ (On peut prendre le log car $-log(y)>0$ comme $y \in \left] 0,1 \right[$)
+
+$x=\mu - \beta log(-log(y)))$
+
+Donc la fonction reciproque de la fonction inverse est donnee par: $F^{-1}(x):=\mu -\beta log(-log(x))$
+
+On rappelle que si U~U([0,1]); $F^{-1}(U) \sim_{Law} X$
+
+On en deduit la methode de simulation d'une loi de Gumbel suivante:
+
+```{r,warning=FALSE}
+
+#a)
+
+#Codage de la fonction quantile de la loi de Gumbel
+quantile_gumbel<-function(x,mu=1,beta=2){
+  return(-(beta*log(-log(x)))+mu)
+}
+
+#Simulation d'un echantillon suivant la densite f par la methode de la fonction quantile
+gumbel_sample<-function(n=100,mu=1,beta=2){ #n taille de l'echantillon en sortie
+  U<-runif(n)
+  return(quantile_gumbel(U,mu,beta))
+}
+
+#Generation de l'echantillon
+G<-gumbel_sample(1000)
+
+#b)
+
+#1er outil graphique: comparaison histogramme/densite
+hist(G,breaks=10,freq=FALSE,main="Comparaison histogramme/densite",xlab='Echantillon',ylab='Valeurs')
+curve(dgumbel(x,loc=1,scale=2),add=TRUE)
+
+#2eme outil graphique: le qq-plot
+G2<-rgumbel(n=1000,loc=1,scale=2)
+qqplot(G,G2,main="QQ-plot",xlab="Valeurs de l'échantillon",ylab="Valeurs theoriques")
+```
+
+La densite d'une loi de Gumbel et l'histogramme de l'echantillon genere ont l'air de bien se supperposer.
+
+Le qqplot ne semble pas trop eloigne d'une droite (l'echantillon etant petit on peut s'attendre un mieux sur un echantillon plus gros).
+
+Les 2 outils graphiques nous permettent de valider la simulation d'une loi de Gumbel par la methode de la fonction inverse.
+
+###q2)
+
+####a)
+
+Soit $(x,y) \in \mathbb{R}^{2}$
+
+Calculons la fonction de repartition de $X_{(1)},X_{(n)}$ :
+
+$F_{X_{(1)},X_{n}}(x,y)=\mathbb{P}(X_{(1)}<x,X_{(n)}<y)$
+
+$=\mathbb{P}(X_{(n)}<y)-\mathbb{P}(X_{(1)}>x,X_{(n)}<y)$
+
+$=\mathbb{P}(X_{1}<y)^{n}-P(x<X_{1}<y)^{n}$
+
+$=F(y)^{n}-(F(y)-F(x))^{n}\mathbb{1}_{x \le y}$ ou F designe la fonction de repartition d'une gumbel.
+
+Notons que la densite de $(X_{(1)},X_{(n)})$ est donnee par:
+
+$f_{1,n}(x,y):=\frac{d}{dx}(\frac{dF}{dy}(x,y))$
+
+$=\frac{d}{dx}nf(y)F(y)^{n-1}-nf(y)(F(y)-F(x))^{n-1}\mathbb{1}_{x \le y}$
+
+$=n(n-1)f(y)f(x)(F(y)-F(x))^{n-2}\mathbb{1}_{x \le y}$
+
+####b) 
+
+Nous allons utiliser la methode du rejet pour simuler suivant $f_{1,n}$
+
+D'une part: comme $0\le F(y) \le 1$ et $0\le F(x) \le 1$ pout tout $x,y \in \mathbb{R}$
+
+On a: $(F(y)-F(x))^{n-2} \le 1$
+
+D'autre part $\mathbb{1}_{x \le y}\le 1$
+
+Donc: $f_{1,n} \le n(n-1)g(x,y)$
+
+Avec $g(x,y):= f(x)f(y)$
+
+g est bien une densite de probabilte car en effet si $X,Y \sim_{iid} f$ ;
+$(X,Y) \sim g$
+
+On peut donc simuler un echantillon de $(X_{1},X_{n})$ en utilisant la densite experimentale g (et on a comme constante n(n-1)). Cependant avec cette densite la probabilite d'acceptation n'est que de l'ordre de $\frac{1}{n^{2}}$
+
+Voici le code permettant de simuler suivant $f_{1,n}$ :
+
+```{r,warning=FALSE}
+#2b)
+
+#Simulation du min et du max via la methode du rejet
+
+#Codage de la densite d'une loi de Gumbel
+f<-function(x,mu=1,beta=2){
+  return(1/beta*exp(-exp(-(x-mu)/beta))*exp(-(x-mu)/beta))
+}
+
+#Codage de la fonction de repartition d'une loi de Gumbel
+FR<-function(x,mu=1,beta=2){ 
+  return(exp(-exp(-(x-mu)/beta)))
+}
+
+#Codage de f1n la densite de (min(X1,...,Xn),max(X1,...,Xn))
+f1n_basic<-function(n=100,x,y,mu=1,beta=2){
+  if(x<=y){return((n*(n-1)*((FR(y,mu,beta)-FR(x,mu,beta))^(n-2))*f(x,mu,beta)*f(y,mu,beta)    ))}
+  else{return(0)}
+}
+
+#Bonne methode pour la vectorisation
+f1n<-function(n=100,x,y,mu=1,beta=2){
+  return((n*(n-1)*((FR(y,mu,beta)-FR(x,mu,beta))^(n-2))*f(x,mu,beta)*f(y,mu,beta)*(x<=y)))
+}
+
+#Codage de la densite experimentale
+g<-function(x,y,mu=1,beta=2){
+  return(f(x,mu,beta)*f(y,mu,beta))
+}
+
+#methode pour obtenir un echantillon de (min(X1,...,Xn),max(X1,...,Xn)) basique suivant la methode du rejet.
+f1n_sample_basic<-function(m=1,n=100,mu=1,beta=2){ #m designant la taille de l'ecantillon a obtenir
+  
+  #initialisation
+  output<-matrix(nrow=m,ncol=2)
+  i=1
+  
+  #boucle principale
+  for(i in (1:m)){
+    G1<-gumbel_sample(1,mu,beta)
+    G2<-gumbel_sample(1,mu,beta)
+    U<-runif(1,min=0,max=n*(n-1)*g(G1,G2,mu,beta))
+    while(U > f1n(n,G1,G2,mu,beta)){
+        G1<-gumbel_sample(1,mu,beta)
+        G2<-gumbel_sample(1,mu,beta)
+        U<-runif(1,min=0,max=n*(n-1)*g(G1,G2,mu,beta))
+    }
+    output[i,]<-c(G1,G2)
+  }
+  return(output)
+}
+
+#Bonne methode pour obtenir un echantillon suivant f1n utilisant qu'il faut tirer en moyenne n*(n-1) gumbel pour obtenir 1 echantillon de X(1), X(n)
+f1n_sample<-function(m=1,n=100,mu=1,beta=2){
+  
+  #Initialisation
+  m2<-m
+  mins<-c()
+  maxs<-c()
+  
+  #Boucle principale
+  while(m2>0){
+    G1<-gumbel_sample(n*n,mu,beta)
+    G2<-gumbel_sample(n*n,mu,beta)
+    u<-runif(n*n,min=0,max=n*(n-1)*g(G1,G2,mu,beta))
+    w<-(u<=f1n(n,G1,G2,mu,beta))
+    mins<-append(mins,G1[which(w)])
+    maxs<-append(maxs,G2[which(w)])
+    m2=m-length(mins)
+  }
+  return(matrix(c(mins,maxs),nrow=m,ncol=2))
+}
+
+#Validation de la methode
+
+#Permet de generer un echantillon de X(1),X(n)en utilisant f et sans utiliser la densite f1n.
+f_sample_basic<-function(m=1,n=100,mu=1,beta=2){
+  
+    y<-matrix(nrow=m,ncol=2)
+    
+    for(i in(1:m)){
+      tmp<-gumbel_sample(n,mu,beta)
+      y[i,]<-c(min(tmp),max(tmp))
+    }
+    
+    return(y)
+}
+
+#Version vectorisee pour l'efficacite
+f_sample<-function(m=1,n=100,mu=1,beta=2){
+
+  tmp<-matrix(gumbel_sample(n*m,mu,beta),nrow=m,ncol=n)
+  mins<-apply(tmp,1,min)
+  maxs<-apply(tmp,1,max)
+  output<-matrix(nrow=m,ncol=2)
+  output[,1]<-mins
+  output[,2]<-maxs
+
+  return(output)
+}
+
+G3=f1n_sample(1000)
+#G3[,2]>=G3[,1]
+G4<-f_sample(1000)
+#G4[,2]>=G4[,1]
+
+#Validation de la methode via qq-plot
+#Les max
+qqplot(G3[,2],G4[,2],main="QQ-plot des max: f vs f1n",xlab="echantillon genere selon f1n",ylab="echantillon genere selon f")
+#Les min
+qqplot(G3[,1],G4[,1],main="QQ-plot des min: f vs f1n",xlab="echantillon genere selon f1n",ylab="echantillon genere selon f")
+
+```
+
+##Partie 2
+
+###q1)
+
+Premierement nous allons majorer la variance de $\delta$ afin de prouver que:
+
+-$\delta \in L^{2}$
+
+-se donner une idee du nombre de simulations maximum a faire pour obtenir une estimation de $\delta$ avec une precision $epsilon$.
+
+$\mathbb{Var}[\delta]\le \mathbb{E}[\delta^{2}]$
+
+$=\int (x-y)^{2}f_{1,n}(x,y)dxdy$
+
+$\le n(n-1)\int (x-y)^2 g(x,y)dxdy$
+
+$=n(n-1) [ \int x^{2}f(x)f(y)dxdy +\int y^{2}f(x)f(y)dxdy -2\int xyf(x)f(y)dxdy]$
+
+$=n(n-1)[2\int x^{2}f(x)dx-2(\int xf(x))^2]$
+
+$=2n(n-1)\mathbb{Var}[X_{1}]$ o? $X_{1} \sim Gumbel(mu,beta)$
+
+Pour simuler suivant $(X_{(1)},X_{(n)})$; On remarque que:
+
+$\mathbb{E}[\Delta]=\mathbb{E}_{f_{1,n}}\left[h_{1}((X_{(1)},X_{(n)}))\right]$
+
+$\mathbb{E}[\Delta]=\mathbb{E}_{f}\left[h_{2}(X_{1},\dots,X_{n})\right]$
+
+Avec: 
+
+$(X_{(1)},X_{(n)}) \sim f_{1,n}$
+
+$X_{1},\dots,X_{n} \sim_{iid} f$
+
+$h1:(x,y) \to y-x$
+
+$h2:(x_{1},\dots,x_{n}) \to max(x_{1},\dots,x_{n})-min(x_{1},\dots,x_{n})$
+
+On en deduit les estimateurs de Monte-Carlo suivant:
+
+$\delta_{m,f_{1,n}}:=\frac{1}{m}\sum_{i=1}^{m}h1((X_{(1)},X_{(n)})_{i})$ 
+
+$delta_{m,f}:=\frac{1}{m}\sum_{i=1}^{m}h2((X_{1},\dots,X_{n})_{i})$
+
+Avec
+
+$(X_{(1)},X_{(n)})_{i=1,\dots,m}\sim_{iid}f_{1,n}$
+
+$(X_{1},\dots,X_{n})_{i}\sim_{iid} f$
+
+Pour $\delta_m \in (\delta_{m,f_{1,n},\delta_{m,f}})$
+
+Des lors que $\Delta$ est $L^{1}$ : 
+
+$\delta_{m} \to_{m \to \infty} delta:=\mathbb{E}[\Delta]$ d'apres la loi des grands nombres.
+
+On a de plus: $\mathbb{P} (\delta \in \left[ \delta_{m}-q_{1-\frac{\alpha}{2}}^{N(0,1)} \sqrt(\frac{\mathbb{Var}(\delta)}{m}), \delta_{m}+q_{1-\frac{\alpha}{2}}^{N(0,1)} \sqrt(\frac{\mathbb{Var}(\delta)}{m}) \right]) \to 1- \alpha$ car $\Delta$ est dans $L^{2}$ et le TCL s'applique.
+
+On en deduit un ordre de grandeur du nombre m de tirages a faire:
+
+On veut: $2q_{1-\frac{\alpha}{2}}^{N(0,1)} \sqrt(\frac{\mathbb{Var}(\delta)}{m})\le \epsilon$
+
+ie:$m>\frac{4}{\epsilon^{2}}q_{1-\frac{\alpha}{2}}^{2}Var[\delta]$
+
+Probleme: $Var[\delta]$ inconnu donc 2 solutions:
+
+-remplacer $Var[\delta]$ par $Var[\delta_{m}]$ calcule precedemment; mais plus rien ne nous garantit la precision $\epsilon$
+
+-majorer la variance par $2n(n-1)Var[X_{1}]$. Mais le cout en simulations peut-etre enorme...
+####a)
+
+```{r,warning=FALSE}
+
+#Compromis burn-in/iteratif
+#Methode avec periode de chauffe pour estimer la variance, et qui assure une precision epsilon quitte a faire trop d'iterations.
+
+delta_f_eps<-function(n=100,eps=1/100,level=0.95,mu=1,beta=2){
+  
+  #estimation de la variance: burn-in
+  
+  sample1<-f_sample(10000,n,mu,beta)
+  y1<-sample1[,2]-sample1[,1]
+  var1<-Mc.estim(y1,level)$var
+  
+  #borne inf de la taille de l'echantillon
+  m<-floor(4/(eps^2)*(qnorm((1+level)/2)^2)*var1)+1
+  
+  #Generation de l'echantillon
+  
+  y<-f_sample(m,n,mu,beta)
+  y<-y[,2]-y[,1]
+  
+  tmp<-Mc.estim(y,level)
+  
+  #MC
+  while(tmp$IC[2]-tmp$IC[1]>eps){
+    #on en retire 1000 a chaque fois pour garantir en sortie la precision epsilon
+    y2<-f_sample(1000,n,mu,beta)
+    y2<-y2[,2]-y2[,1]
+    y<-c(y,y2)
+    tmp<-Mc.estim(y,level)
+    m<-m+1000
+  }
+  
+  tmp<-Mc.estim(y,level)
+  
+  return(list(nb_tirages=m,delta=tmp$delta,var=tmp$var,eps=tmp$IC[2]-tmp$IC[1]))
+}
+
+delta_f=delta_f_eps()
+
+#Methode burn-in
+#Methode avec periode de chauffe pour estimer la variance, et qui assure une precision proche de epsilon (plus performante au niveau du temps d'execution mais ne garantit plus la precision epsilon).
+
+delta_f_eps_1<-function(n=100,eps=1/100,level=0.95,mu=1,beta=2){
+  
+  #estimation de la variance: burn-in
+  
+  sample1<-f_sample(10000,n,mu,beta)
+  y1<-sample1[,2]-sample1[,1]
+  var1<-Mc.estim(y1,level)$var
+  
+  #borne inf de la taille de l'echantillon
+  m<-floor(4/(eps^2)*(qnorm((1+level)/2)^2)*var1)+1
+  
+  #Generation de l'echantillon
+  
+  y<-f_sample(m,n,mu,beta)
+  y<-y[,2]-y[,1]
+  
+  #MC
+  
+  tmp<-Mc.estim(y,level)
+  
+  return(list(nb_tirages=m,delta=tmp$delta,var=tmp$var,eps=tmp$IC[2]-tmp$IC[1]))
+}
+
+delta_f_1=delta_f_eps_1()
+
+
+#Methode iterative
+#Garantit la precision eps et le nombre minimum de simulations mais le temps d'execution est en general le plus long
+#Ne pas tenter d'executer
+
+delta_f_eps_it<-function(n=100,eps=1/100,level=0.95,mu=1,beta=2){
+  
+  #eps=1/100
+  #level=0.95
+  
+  #Initialisation
+  m=2 #On commence a 2 pour que la variance soit non nulle
+  sample<-f_sample(2,n,mu,beta)
+  y<-sample[,2]-sample[,1]
+  output<-Mc.estim(y,level)
+  
+  #boucle principale
+  while(output$IC[2]-output$IC[1]>eps){
+    m<-m+1
+    sample<-f_sample(1,n,beta,mu)
+    y<-c(y,sample)
+    output<-Mc.estim(y,level)
+  }
+  
+  return(output)
+}
+
+results<-matrix(c(as.array(delta_f_1),as.array(delta_f)),nrow=4,ncol=2)
+rownames(results)<-c('Nombre de tirages','Valeur de delta',"Variance de l'estimateur","Precision")
+colnames(results)<-c('Methode burn-in','Methode Burn-in/iterative')
+print(results)
+```
+On choisira la methode 1 c'est a dire le compromis iteratif/burn-in. C'est a dire que l'estimateur de la variance est aleatoire et varie autour de $\mathbb{Var}[\delta]$. Si l'estimateur est superieur ou egal a la vraie valeur de $\mathbb{Var}[\delta]$ on ne rentre meme pas dans la boucle while. Dans le pire des cas cela ne devrait pas se jouer a enormement d'iterations dans la boucle: c'est donc le meilleur compromis nombre de simulations/temps d'execution qui respecte la precision $\epsilon$ en sortie.
+La methode 2 est la plus rapide en terme de temps d'execution mais rien ne garantit la precision $\epsilon$ ceci dit le precision devrait etre tres proche de $\epsilon$
+La methode 3 garantit le nombre minimum de simulations et la precision $\epsilon$ mais est la plus couteuse en terme de cout d'execution. L'algorithme ne tourne pas sur R (du moins en temps raisonnable) mais pourrait fonctionner en python. En effet:
+
+Cet algorithme est convergeant pour tout $\epsilon >0$ des lors que:
+
+-$\delta_{m,f_{1,n}} \to \delta$
+
+-$\mathbb{Var}(\delta) < \infty$
+
+####b)
+
+
+```{r,warning=FALSE}
+
+#METHODE ITERATIVE 
+
+#Ne pas faire tourner
+
+delta_f1n_eps_it<-function(n=100,eps=1/100,level=0.95,mu=1,beta=2){
+  
+  #Initialisation
+  m=2 #On commence a 2 pour que la variance soit non nulle
+  sample<-f1n_sample(2,n,mu,beta)
+  y<-sample[,2]-sample[,1]
+  output<-Mc.estim(y,level)
+  
+  #boucle principale
+  while(output$IC[2]-output$IC[1]>eps){
+    m<-m+1
+    sample<-f1n_sample(1,n,beta,mu)
+    y<-c(y,sample)
+    output<-Mc.estim(y,level)
+  }
+  
+  return(output)
+}
+
+#METHODE AVEC PERIODE DE CHAUFFE
+
+delta_f1n_eps_1<-function(n=100,eps=1/100,level=0.95,mu=1,beta=2){
+  #estimation de la variance: burn-in
+  
+  sample1<-f1n_sample(10000,n,mu,beta)
+  y1<-sample1[,2]-sample1[,1]
+  var1<-Mc.estim(y1,level)$var
+  
+  #borne inf de la taille de l'echantillon
+  m<-floor(4/(eps^2)*(qnorm((1+level)/2)^2)*var1)+1
+  
+  #Generation de l'echantillon
+  
+  y<-f1n_sample(m,n,mu,beta)
+  y<-y[,2]-y[,1]
+  
+  
+  #MC
+  tmp<-Mc.estim(y,level)
+  delta<-tmp$delta[m]
+  IC<-tmp$IC[m,]
+  var<-tmp$var[m]
+  
+  return(list(nb_tirage=m,var=var,delta=delta,eps=IC[2]-IC[1]))
+  
+}
+#  print('Methode burn-in:')
+#  delta_f1n_1<-delta_f1n_eps_1(10)
+#  print(delta_f1n_1)
+
+#Methode burn-in/iterative
+
+delta_f1n_eps<-function(n=100,eps=1/100,level=0.95,mu=1,beta=2){
+  
+  n=10
+  
+  #estimation de la variance: burn-in
+  
+  sample1<-f1n_sample(10000,n,mu,beta)
+  y1<-sample1[,2]-sample1[,1]
+  var1<-Mc.estim(y1,level)$var
+  
+  #borne inf de la taille de l'echantillon
+  m<-floor(4/(eps^2)*(qnorm((1+level)/2)^2)*var1)+1
+  
+  #Generation de l'echantillon
+  
+  y<-f1n_sample(m,n,mu,beta)
+  y<-y[,2]-y[,1]
+  tmp<-Mc.estim(y,level)
+  
+  while(tmp$IC[2]-tmp$IC[1]>eps){
+    #on en retire 1000 a chaque fois pour garantir en sortie la precision epsilon
+    y2<-f1n_sample(1000,n,mu,beta)
+    y2<-y2[,2]-y2[,1]
+    y<-c(y,y2)
+    tmp<-Mc.estim(y,level)
+    m<-m+1000
+  }
+  
+  #MC
+  
+  delta<-tmp$delta[m]
+  IC<-tmp$IC[m,]
+  var<-tmp$var[m]
+  
+  return(list(nb_tirage=m,var=var,delta=delta,eps=IC[2]-IC[1]))
+}
+
+# print('Methode hybride:')
+# delta_f1n<-delta_f1n_eps(10)
+# print(delta_f1n)
+
+
+```
+
+Au niveau de la comparaison c'est sans aucun doute la simulation suivant f qui est la plus efficace. En effet les algorithmes sont les memes c'est a dire que le nombre de simulations a faire est le meme a l'alea de l'estimation de la variance pres; le cout de calcul de la fonction 'Mc.estim.evol' est le meme dans les simulatons suivant $f$ et $f_{1,n}$. La seule difference vient du cout des simulations: en effet pour generer un échantillon de taille m suivant f on genere $mn$ gumbels avec un cout unitaire $C$ donc le cout total est $mnC$. Pour generer un échantillon de taille m suivant $f_{1,n}$; la probabilite d'acceptation d'un couple de gumbels etant de $\frac{1}{n(n-1)}$ on genere *en moyenne* $mn(n-1)$ gumbels pour un cout total de $Cmn(n-1)$ soit (n-1) fois (au moins) le cout de la simulation suivant f. En deboguant on se rend compte que le cout de simulation d'une gumbel n'est pas nul (du tout); du moins avec la methode de simulation proposee dans la partie 1. C'est pourquoi quand n devient grand il devient absolument impensable de simuler suivant $f_{1,n}$.
+
+En voici l'illustration:
+
+```{r,warning=FALSE}
+test<-microbenchmark(f_sample(100,10),f1n_sample(100,10))
+print(test, unit="ms",signif=2)
+```
+
+
+On voit que m, la taille de l'echantillon $\delta_{m}$ est de l'ordre de $10^6$ en posant C=1 et n=10 on trouve que le cout de simulation suivant f est de $10^{7}$, celui suivant $f_{1,n}$ est de $10^8$ ce qui est vraiment beaucoup plus que $10^{7}$
+
+###q2)
+
+####a)
+
+Soit $X:=(X^{(1)}\dots X^{(n)})$ avec $X^{(1)}\dots X^{(n)} \sim iid f$
+
+Calculons $\mathbb{E}[h_{0}(X)]$ avec:
+
+$h_{0}:(x_{1},\dots,x_{n}) \to \frac{1}{n}\sum_{i=1}^{n}exp(exp(-\frac{x_{i}-\mu}{\beta})) \mathbb{1}_{x_{i} > \mu}$
+
+$\mathbb{E}[h_{0}(X)]=\frac{1}{n}\sum_{i=1}^{n}\mathbb{E}[exp(exp(-\frac{X^{(i)}-\mu}{\beta}))\mathbb{1}_{X^{(i)} > \mu}]$ par linearite de l'esperance.
+
+$=\frac{1}{n}\sum_{i=1}^{n}\mathbb{E}[exp(exp(-\frac{X^{(1)}-\mu}{\beta}))]$ car les $X^{(i)}$ sont identiquement distribuees.
+
+$=\mathbb{E}[exp(exp(-\frac{X^{(1)}-\mu}{\beta}))\mathbb{1}_{X^{(1)} > \mu}]$
+
+$=\int_{\mu}^{\infty}\frac{1}{\beta}exp(-\frac{x-\mu}{\beta})dx$
+
+$=\left [ -exp(-\frac{x-\mu}{\beta}) \right ]_{\mu}^{\infty}$
+
+$=exp(-\frac{2\mu}{\beta})$
+
+De plus: 
+
+$\mathbb{Var}[h_{0}(X)]=\frac{1}{n}\mathbb{Var}[exp(exp(-\frac{X^{(1)}-\mu}{\beta})) \mathbb{1}_{X^{(1)} > \mu}]$ (Va iid)
+
+$\le \mathbb{E}[exp(2exp(-\frac{X^{(1)}-\mu}{\beta}))]$
+
+$=\int_{\mu}^{\infty}\frac{1}{\beta}exp(exp(-\frac{x-\mu}{\beta})exp(-\frac{x-\mu}{\beta}))dx$ qui est integrable en $+\infty$.
+
+On en deduit un estimateur par la variable de controle:
+
+$\delta_{m}(b)=\frac{1}{m}\sum_{k=1}^{m}h(X_{k})-b(h_{0}(X_{k})-p)$
+
+Avec:
+
+Pour $k \in {1,\dots,m}$ $X_{k}:=(X_{k}^{(1)},\dots,X_{k}^{(n)})$ avec $X_{k}^{(i)}\sim f$ iid.
+
+$h:(x_{(1)},\dots,x_{(n)})\to max(x_{(1)},\dots,x_{(n)})-min(x_{(1)},\dots,x_{(n)})$
+
+$h_{0}:(x_{1},\dots,x_{n}) \to \frac{1}{n}\sum_{i=1}^{n}exp(exp(-\frac{x_{i}-\mu}{\beta})) \mathbb{1}_{x_{i} > \mu}$
+
+
+$p:=exp(-\frac{2\mu}{\beta})$
+
+On prendra:
+
+$b:=\frac{cov(h(X),h_{0}(X))}{\mathbb{Var[h_{0}(X)]}}$ dont un estimateur est donne par:
+
+$b^{*}:=\frac{\sum_{k=1}^{l}(h_{0}(X_{k})-p)(h(X_{k})-\frac{1}{l}\sum_{k=1}^{l}h(X_{k}))}{\sum_{k=1}^{l}(h_{0}(X_{k})-p)^2}$
+
+On a enfin
+
+$\rho(h(X),h_{0}(X))=b\sqrt{\frac{Var[h(X)]}{Var[h_{0}(X)]}}$
+
+
+```{r}
+#Le code pour estimer delta via la variable de controle
+
+#Codage de h0
+h0<-function(x,mu=1,beta=2){
+  
+  h0_x<-exp(exp(-(x-mu)/beta))
+  h0_x<-(x>=mu)*h0_x
+  h0_x<-apply(h0_x,1,mean)
+  
+  return(h0_x)
+}
+
+#Codage de h
+h<-function(x){
+  mins<-apply(x,1,min)
+  maxs<-apply(x,1,max)
+  h_x<-maxs-mins
+  
+  return(h_x)
+}
+
+#Methode avec burn-in
+delta_controle_burn_in<-function(m=100000,n=100,mu=1,beta=2,level=0.95){
+  
+  p<-exp(-2*mu/beta)
+  l<-round(m/10)#On prend 10% des valeurs pour estimer b
+  
+  #burn-in
+  x<-matrix(gumbel_sample(l*n,mu,beta),nrow=l,ncol=n)
+  
+  h_x<-h(x)
+  h0_x<-h0(x)
+  
+  b=mean((h0_x-p)*(h_x-mean(h_x)))/mean((h0_x-p)*(h0_x-p))
+  
+  #Generation de l'echantillon
+  x<-matrix(gumbel_sample((m-l)*n,mu,beta),nrow=m-l,ncol=n)
+  
+  h_x<-h(x)
+  h0_x<-h0(x)
+  
+  y<-h_x-b*(h0_x-p)
+  
+  #MC
+  mc_controle<-Mc.estim(y,level)
+  mc_classic<-Mc.estim(h_x,level)
+  output<-matrix(nrow=2,ncol=4)
+  output[1,]<-c(mc_controle$delta,mc_controle$var,mc_controle$IC[1],mc_controle$IC[2])
+  output[2,]<-c(mc_classic$delta,mc_classic$var,mc_classic$IC[1],mc_classic$IC[2])
+  colnames(output)<-c('Valeur de delta',"Variance","IC-","IC+")
+  rownames(output)<-c('Monte Carlo classique','Monte Carlo avec variable de controle')
+  
+  return(output)
+  
+}
+
+print('Variable de controle avec burn-in')
+result_controle<-delta_controle_burn_in()
+print(result_controle)
+
+#Methode sans burn-in
+delta_controle<-function(m=100000,n=100,mu=1,beta=2,level=0.95){
+  
+  p=exp(-2*mu/beta)
+  
+  #Generation de l'echantillon
+  x=matrix(gumbel_sample(m*n,mu,beta),nrow=m,ncol=n)
+
+  h_x<-h(x)
+  
+  h0_x<-h0(x)
+  
+  b=mean((h0_x-p)*(h_x-mean(h_x)))/mean((h0_x-p)*(h0_x-p))
+  
+  y=h_x-b*(h0_x-p)
+  
+  #MC
+  mc_controle<-Mc.estim(y,level)
+  mc_classic<-Mc.estim(h_x,level)
+  output<-matrix(nrow=2,ncol=4)
+  output[1,]<-c(mc_controle$delta,mc_controle$var,mc_controle$IC[1],mc_controle$IC[2])
+  output[2,]<-c(mc_classic$delta,mc_classic$var,mc_classic$IC[1],mc_classic$IC[2])
+  colnames(output)<-c('Valeur de delta',"Variance","IC-","IC+")
+  rownames(output)<-c('Monte Carlo classique','Monte Carlo avec variable de controle')
+  
+}
+
+print('Variable de controle sans burn-in')
+result_controle_2<-delta_controle()
+print(result_controle)
+
+
+#sert a calculer la correlation
+delta_controle_rho<-function(m=100000,n=100,mu=1,beta=2,level=0.95){
+  
+  p=exp(-2*mu/beta)
+  
+  #Generation de l'echantillon
+  x=matrix(gumbel_sample(m*n,mu,beta),nrow=m,ncol=n)
+  
+  mins<-apply(x,1,min)
+  maxs<-apply(x,1,max)
+  h_x<-maxs-mins
+  
+  h0_x<-exp(exp(-(x-mu)/beta))
+  h0_x<-(x>=mu)*h0_x
+  h0_x<-apply(h0_x,1,mean)
+  
+  return(cor(h_x,h0_x))
+  
+}
+
+print('la correlation entre h0 et h:')
+print(delta_controle_rho())
+```
+####b)
+D'un point de vue variance (et donc précision) la variable de controle ne gagne pas sur la methode de MC classique (a l'alea pres). 
+Cela vient probablement du fait que la correlation entre h0(X) et h(X) est quasi-nulle.
+Le cout de calcul de h0 n'etant pas nul on preferera MC classique a MC avec la variable de controle choisie precedemment.. 
+
+##Partie 3
+
+###q1)
+
+Afin de pouvoir utiliser l'estimation de Monte Carlo pour la probabilite demandee, montrons que $\mathbb{1}_{V_{(n)}\ge8} \in L^{2}$
+
+On a $\mathbb{1}_{V_{(n)}\ge8}\le1$ et $1 \in L^{2}$
+
+Donc $\mathbb{1}_{V_{(n)}\ge8} \in L^{2}$
+
+On en deduit l'estimateur de Monte-Carlo classique pour p
+
+$\frac{1}{m}\sum_{i=1}^{m}\mathbb{1}_{V_{(n)}^{i}\ge 8}$
+
+avec $V_{(n)}^{i}= max(V_{1}^{i},\dots,V_{n}^{i})$
+
+$V_{1}^{i},\dots,V_{n}^{i}\sim_{iid}\epsilon(2)$ pour tout $i \in 1,\dots,m$
+```{r}
+#Estimation de P(V(n)>=8) par méthode de monte carlo classique
+rho_estim_classic<-function(m=1000,n=1000,t=8,lambda=2,level=0.95){
+  
+  #Generation de l echantillon
+  tmp<-matrix(rexp(m*n,rate=lambda),nrow=m,ncol=n)
+  y<-apply(tmp,2,max)
+  y<-(y>=t)
+  
+  #MC
+  estimation<-Mc.estim(y,level)
+  return(estimation)
+}
+
+rho<-rho_estim_classic()
+print(rho)
+```
+L'estimateur de Monte Carlo classique nous donne une estimation nulle. En effet, ce n'est pas etonnant car il s'agit d'un evenement rare qui ne se produit presque jamais. Il faudra donc trouver une autre methode pour l'estimer.
+
+###q2)
+
+####a)
+
+Cherchons la fonction de repartition de $V_{(n)}-0.5log(n)$.
+
+On a pour $t \in \mathbb{R}$,  $\mathbb{P}(V_{(n)}-0.5log(n)<=t)= \mathbb{P}(V_{(n)}\le t +0.5log(n))$
+
+$=\mathbb{P}(V_{1}\le t+0.5log(n))^{n}$ Car ils sont independants et identiquement distribues
+
+$=(1-e^{-2(t+0.5log(n))})^{n}$
+
+$=(1-\frac{e^{-2t}}{n})^{n}$
+
+$=e^{n(log(1-\frac{e^{-2t}}{n}))}$
+
+Par developpement limite, $log(1-x)\sim_{x \to 0} -x$
+
+Donc on obtient 
+
+$=e^{-e^{-2t}}$ 
+
+On reconnait la fonction de repartition d'une Gumbel(0,1/2)
+
+Donc, $V_{(n)}-0.5log(n) \sim Gumbel(0,1/2)$
+
+####b)
+
+Pour pouvoir utiliser la methode de l'echantillonage preferentiel, il faut trouver une loi ayant une probabilite d'etre superieure a 8 pas trop proche de 0. 
+
+On choisit ici une Gumbel(8,1/2) comme loi instrumentale de densite g. 
+
+On a choisi cette loi car l'esperance d'une gumbel est a peu pres egale a $\mu+0.58\beta \sim 8.3$
+
+En choisissant cette loi, on aura forcement des elements de l'echantillon qui seront superieurs a 8.
+
+Tout d'abord, calculons la densite f de $V_{(n)}$
+
+Pour $t \in \mathbb{R^{+}}$, $\mathbb{P}(V_{(n)}\le t)=\mathbb{P}(V_{1}\le t)^{n}$ car ils sont iid
+
+$=(1-e^{-2t})^{n}$
+
+Ensuite, on derive par rapport a t pour obtenir la densite et on obtient : 
+
+$f(t)=\frac{d}{dt} (1-e^{-2t})^{n})=2ne^{-2t}(1-e^{-2t})^{n-1}$
+
+On calcule maintenant le rapport des deux densites pour obtenir l'estimateur d'echantillonage preferentiel
+
+Pour $x \in \mathbb{R}$
+$\frac{f(x)}{g(x)}=\frac{ne^{-2x}(1-e^{-2x})^{n-1}\mathbb{1}_{x>0}}{exp(-exp(-2(x-8)))exp(-2(x-8))}$ ou g designe la densite d'une Gumbel. (Ce rapport est borne par n).
+
+On peut donc utiliser l'estimateur d'echantillonage preferentiel $\delta_{n}=\frac{1}{n}\sum_{i=1}^{n}\frac{f(Z_{i})}{g(Z_{i)}}h(Z_{i})$ ou $(Z_{1},...,Z_{n})\sim Gumbel(8,1/2)$ et $h(Z_{i})=1_{Z_{i}\ge8}$
+
+```{r}
+#f la densité d'une Gumbel a déjà été codée
+
+#g2 désignera la densité de V(n)
+g2<-function(x,n=1000){
+  return(2*n*exp(-2*x)*(1-exp(-2*x))^(n-1)*(x>0))
+}
+
+#Estimation par echantillonage préferentiel, on prend une gumbel(8,1/2) pour loi d'importance
+rho_estim_importanceSampling<-function(m=1000,n=1000,mu=8,beta=1/2,level=0.95){
+#n nombre d'exponentielles par échantillon, m taille de l'échantillonnage
+  
+  #Echantillon
+  gum<-gumbel_sample(m,mu,beta)
+  importance_sampling<-g2(gum,n)/f(gum,mu,beta)*(gum>=mu) #f/g*h
+  
+  #MC
+  return(Mc.estim(importance_sampling,level))
+}
+
+rho_pref<-rho_estim_importanceSampling(1000)
+print(rho_pref)
+```
+
+###q3)
+
+1. La variance:L'estimateur de Monte Carlo classique donne une variance nulle. L'efficacite relative de la methode d'echantillonage preferentiel par rapport a la methode de Monte Carlo classique est donc nulle: On preferera toujours d'un point de vue variance MC classique car il donne une variance nulle... Ceci dit l'estimation de p est mauvaise.
+
+2. Le nombre de VA: De plus, la simulation par Monte Carlo classique necessite 1000 tirages de la loi exponentielle pour chaque element de la somme a estimer, et si on veut 1000 realisations de V(n) il faut simuler $10^{6}$ VA; donc elle est tres couteuse par rapport a la methode d'echantillonage preferentiel qui simule 1000 gumbel en tout.
+
+Verifions l'efficacite relative en pratique:
+
+```{r}
+test2<-microbenchmark(rho_estim_classic(100,10),rho_estim_importanceSampling(100,10))
+print(test2, unit="ms",signif=2)
+```
+Comme prevu meme au niveau du temps d'execution l'importance sampling fait mieux.
+
+Donc si on privilegie une estimation precise de la probabilite de l'evenement rare a une variance nulle; on preferera toujours l'importance sampling a MC classique. Mais en ne s'interessant qu'a l'efficacite relative MC classique est infiniment meilleur que L'importance sampling.
+
+###q4)
+
+####a)
+
+Etant donne qu'on genere la loi de gumbel a partir d'une loi uniforme et de la bijection reciproque de la fonction de repartition de la gumbel, on va generer cette meme loi avec la methode de la variable antithetique en utilisant le fait que 1-U suit la meme loi que U si $U\sim Unif([0,1])$
+
+Ainsi, en considerant $F^{-1}$ la bijection reciproque de la fonction de repartition de la Gumbel(8,1/2), on obtient à partir de l'estimateur de l'echantillonnage preferentiel le nouvel estimateur antithetique suivant 
+
+$\delta_{n,antit}=\frac{1}{n}\sum_{k=1}^{n}\frac{1}{2}(h(F^{-1}(U))\frac{f(F^{-1}(U))}{g(F^{-1}(U))} +h(F^{-1}(AoU)\frac{f(F^{-1}(AoU))}{g(F^{-1}(AoU))})$ où $AoU=1-U$
+
+```{r,warning=FALSE}
+
+#Estimation par la méthode de la variable antithétique
+
+#Permet de doubler la taille de l'echantillon de gumbel
+gumbel_sample2<-function(n=100,mu=1,beta=2){ #n le nombre de tirages
+  U<-runif(n)
+  V<-1-U
+  output<-matrix(nrow=2,ncol=n)
+  output[1,]<-quantile_gumbel(U,mu,beta)
+  output[2,]<-quantile_gumbel(V,mu,beta)
+  return(output)
+}
+
+#estimation de rho via variable antithetique + importance sampling
+rho_estim_anti<-function(m=1000,n=1000,mu=8,beta=1/2,level=0.95){ 
+  #m taille de l echantillon
+  
+  #echantillonnage
+  importance_sampling<-gumbel_sample2(m,mu,beta)
+  y1<-importance_sampling[1,]
+  y2<-importance_sampling[2,]
+  y<-1/2*g2(y1,n)/f(y1,mu,beta)*(y1>mu)+1/2*g2(y2,n)/f(y2,mu,beta)*(y2>mu)
+  
+  #MC
+  return(Mc.estim(y,level))
+}
+
+rho_anti<-rho_estim_anti()
+#print(rho_anti)
+
+result_IS_anti<-matrix(nrow=3,ncol=4)
+result_IS_anti[1,]<-c(rho$delta,rho$var,rho$IC)
+result_IS_anti[2,]<-c(rho_pref$delta,rho_pref$var,rho_pref$IC)
+result_IS_anti[3,]<-c(rho_anti$delta,rho_anti$var,rho_anti$IC)
+colnames(result_IS_anti)<-c('p','Variance','IC-','IC+')
+rownames(result_IS_anti)<-c('MC classique','MC importance sampling','MC antithetique')
+print(result_IS_anti)
+
+#Calcul de la covariance
+cov_estim_anti<-function(m=1000,n=1000,mu=8,beta=1/2,level=0.95){ 
+  #m taille de l echantillon
+  
+  #echantillonnage
+  importance_sampling<-gumbel_sample2(m,mu,beta)
+  y1<-importance_sampling[1,]
+  y2<-importance_sampling[2,]
+  return(cov(g2(y1,n)/f(y1,mu,beta)*(y1>mu),g2(y2,n)/f(y2,mu,beta)*(y2>mu)))
+}
+
+print('La covariance est:')
+print(cov_estim_anti())
+
+```
+####b)
+
+On a divise la variance de l'estimateur par 2: en effet la variance de l'estimateur est de la forme:
+
+$\mathbb{Var}(\delta_{n,antit})=\frac{1}{4n}(\mathbb{Var}[h(F^{-1}(U))\frac{f(F^{-1}(U))}{g(F^{-1}(U))}]+\mathbb{Var}[(h(F^{-1}(AoU))\frac{f(F^{-1}(AoU))}{g(F^{-1}(AoU))}] +2\mathbb{cov}[h(F^{-1}(U))\frac{f(F^{-1}(U))}{g(F^{-1}(U))},h(F^{-1}(AoU))\frac{f(F^{-1}(AoU))}{g(F^{-1}(AoU))}])$ 
+
+$=\frac{1}{2n}(\mathbb{Var}[h(F^{-1}(U))\frac{f(F^{-1}(U))}{g(F^{-1}(U))}]+\mathbb{cov}[h(F^{-1}(U))\frac{f(F^{-1}(U))}{g(F^{-1}(U))},h(F^{-1}(AoU))\frac{f(F^{-1}(AoU))}{g(F^{-1}(AoU))}])$
+
+Des lors que la covariance est quasi-nulle:
+
+$\sim \frac{1}{2n}\mathbb{Var}[h(F^{-1}(U))\frac{f(F^{-1}(U))}{g(F^{-1}(U))}]$
+
+$=\frac{1}{2}\mathbb{Var}[\delta_{n}]$
+
+Soit la moitie de la variance de MC imortance sampling.
+
+##Ex 2)
+
+###q1)
+
+La question n'est pas posee ici mais si on voulait simuler une Weibull($\lambda$,k) on simulerait $U \sim U([0,1])$ et on a $\lambda(-ln(U))^{1/k} \sim Weibull(\lambda,k)$.
+
+Pour simuler X on peut d'abord simuler $S \sim Poisson(3.7)$ puis conditionnellement a S:
+
+X=0 si S=0
+
+$X=\sum_{s=1}^{S}W_{s}$ sinon; avec $W_{s} \sim Weibull(\lambda=2,k=1/2)$ iid.
+
+```{r}
+simul_X<-function(n,lambda_pois=3.7,lambda_weibull=2,k=1/2){
+  
+  #Tirage de S
+  S<-rpois(n,lambda_pois)
+  
+  x<-numeric(n)
+  for(i in (1:n)){
+    x[i]=sum(rweibull(S[i],shape=k,scale=lambda_weibull))
+  }
+  return(x)
+}
+```
+
+On veut estimer:
+
+$\mathbb{P}(X<3)=\mathbb{E}[\mathbb{1}_{X<3}]$
+
+On en deduit l'estimateur de Monte-Carlo clssique suivant: $h_{n}:=\frac{1}{n}\sum_{k=1}^{n}\mathbb{1}_{X_{k}<3}$
+
+```{r}
+#Estimation de la valeur de p
+p_estim_classic<-function(n=10000,level=0.95){
+  
+  #echantillon
+  x<-simul_X(n)
+  y<-(x<3)
+  
+  
+  #MC
+  return(Mc.estim(y,level))
+}
+
+p=p_estim_classic()
+print(p)
+```
+
+###q2)
+
+####a)
+
+La simulation suivant X est naturellement conditionnee par rapport a S le nombre de precipitations dont l'espace d'etats est $\mathbb{N}$.
+
+Pour tout $n \in \mathbb{N}$ On a $P(S=n)=\frac{3.7^{n}}{n!}e^{-3.7}$
+
+De plus $\mathbb{L}(X|S=n)=\mathbb{L}(\sum_{k=1}^{n}W_{s})$ si n>0; 0 sinon. Et on sait simuler des Weibull.
+
+Le seul probleme est que l'espace d'etat de S est infini denombrable et pour simuler suivant l'allocation proportionnelle il faut une partition finie.
+
+```{r}
+print(dpois(100,3.7))
+print(dpois(150,3.7))
+```
+
+On peut considerer que le poids de toutes les strates {S=n} avec $n\ge 100$ ont un poids nul et on peut donc les neglier et se ramener a un espace d'etats fini.
+
+L'estimateur stratifie selon S est donc de la forme:
+
+$delta_:=\sum_{k=1}^{K}\frac{\mathbb{P}(S=k)}{n_{k}}\sum_{i=1}^{n_{k}}h(X_{i}^{(k)})$
+
+Le cas k=0 implique que $X_{i}^{(k)}$ est nul; on peut donc l'ignorer.
+
+Avec:
+
+$X_{i}^{(k)} \sim iid L(X|S=k) ; k \in {1,\dots,K}$
+
+$h:x \to \mathbb{1}_{x<3}$
+
+De plus, sous l'hypothese de l'allocation on a: $n_{1}=\dots=n_{K}$
+
+On a donc ici K=100 (le nombre de strates de mesure non nulle); on peut prendre de plus n=100 (100 simulations par strate) c'est a dire:
+
+$delta_:=\sum_{k=1}^{100}\frac{\mathbb{P}(S=k)}{100}\sum_{i=1}^{100}h(X_{i}^{(k)})$
+
+```{r}
+#Permet de simuler X|S=k
+simul_X_Sk<-function(k,n=100,lambda_weibull=2,k_weibull=1/2){
+  
+  y<-matrix(rweibull(n*k,scale=lambda_weibull,shape=k_weibull),nrow=n,ncol=k)
+  y<-apply(y,1,sum)
+  
+  return(y)
+}
+
+#Estimateur par stratification proportionnelle
+p_strat_propo<-function(K=100,n=100,lambda_pois=3.7,lambda_weibull=2,k_weibull=1/2,level=0.95){ #K nombre de strates n nombre de tirage par strates
+  
+  #Generation de l'echantillon
+  k<-(1:K)
+  P<-dpois(k,lambda=lambda_pois)
+  y<-matrix(nrow=n,ncol=K)
+    
+  for(i in k){
+    tmp<-simul_X_Sk(i,n,lambda_weibull,k_weibull)
+    tmp<-(tmp<3)
+    y[,i]<-tmp
+  }
+  
+  #MC
+  deltan<-sum(P*apply(y,2,mean))
+  sdn<-1/n*sum(P*apply(y,2,var))
+  Iclevel=c(deltan-sqrt(sdn/n)*qnorm((1+level)/2),deltan+sqrt(sdn/n)*qnorm((1+level)/2))
+  return(list(delta=deltan,var=sdn,IC=Iclevel))
+}
+
+p_strat_prop<-p_strat_propo()
+# print('MC stratifie:')
+# print(p_strat_prop)
+# print('MC classique')
+# print(p)
+
+result_strat_prop<-matrix(nrow=2,ncol=4)
+result_strat_prop[1,]<-c(p_strat_prop$delta,p_strat_prop$var,p_strat_prop$IC[1],p_strat_prop$IC[2])
+result_strat_prop[2,]<-c(p$delta,p$var,p$IC[1],p$IC[2])
+rownames(result_strat_prop)<-c('p par strat. proportionnelle','p par MC classique')
+colnames(result_strat_prop)<-c('p','variance','IC-','IC+')
+print(result_strat_prop)
+
+```
+
+La variance de l'estimateur stratifie (de l'ordre de $10^{-3}$) est << a celle de l'estimateur MC classique. Ceci dit le fait de negliger les strates plus grandes que 100 cree une erreur dans l'estimation de p on trouve en effet un p legerement different (souvent plus petit) avec l'estimateur stratifie car on a mis a 0 des strates n'etant en fait pas de mesure nulle. Rajouter des strates permettrait d'avoir une meilleure estimation de p mais serait tres couteuse en terme de calculs (on simulerait de plus en plus de VA): ici en prenant 100 strates et en simulant 100 variables par strates on simule 10000 variables; le meme nombre qu'on avait simule pour MC classique. Le cout en simulations est donc a peu pres le meme et la variance est vraiment plus faible donc malgre l'approximation dans le calcul; on preferera MC stratifie a MC classique.
+
+###q3)
+
+L'estimateur stratifie avec allocation optimale est de la forme:
+
+$delta_:=\sum_{k=1}^{K}\frac{\mathbb{P}(S=k)}{n_{k}}\sum_{i=1}^{n_{k}}h(X_{i}^{(k)})$
+
+Avec:
+
+$n_{k}:=n\frac{p_{k}\sigma_{k}}{\sum_{i=1}^{K}p_{i}\sigma_{i}}$
+
+$p_{k}=\mathbb{P}(S=k)$
+
+Il y a 3 problemes:
+
+1. Comme precedemment le support de S est de cardinal infini: il faudra donc negliger les strates de mesure quasi-nulle meme si l'estimation sera incorrecte.
+
+2. Les $\sigma_{k}$ sont inconnus: il faudra d'abord les estimer pour pouvoir calculer l'allocation optimale. Ce qui nous amene au sous-probleme lie a leur estimation: dans les strates elevees (par exemple k=90) on a $\mathbb{P}(\sum_{s=1}^{90}W_{s}<3)\sim 0$ et les $\sigma_{k}$ seront nuls APCR.
+
+3. Les $n_{k}$ ne sont a priori pas entiers: il faudra donc les arrondir ce qui fait que l'allocation optimale ne sera pas vraiment atteinte.
+
+On estimer les $\sigma_{k}$ par un 'burn-in'.
+
+```{r,warning=FALSE}
+p_strat_opti<-function(K=100,n=10000,lambda_pois=3.7,lambda_weibull=2,k_weibull=1/2,level=0.95){
+  
+  #taille des echantillons
+  n1=10/100*n #taille de l'echantillon pour la chauffe
+  n2=n-n1
+  
+  #Echantillon de chauffe
+  k<-(1:K)
+  P<-dpois(k,lambda=lambda_pois)
+  y<-matrix(nrow=n1,ncol=K)
+    
+  for(i in k){
+    tmp<-simul_X_Sk(i,n1,lambda_weibull,k_weibull)
+    tmp<-(tmp<3)
+    #print(tmp)
+    y[,i]<-tmp
+  }
+  
+  sigma<-apply(y,2,sd) #vecteur des ecart-types par srates
+  C<-sum(P*sigma)
+  allocations<-1/C*P*sigma #les allocations
+  nk=floor(allocations*n2) #nombre d'échantillons a tirer par strates
+  
+  y2<-numeric(K)
+  for(j in k){
+    tmp2<-simul_X_Sk(j,nk[k],lambda_weibull,k_weibull)
+    tmp2<-(tmp2<3)
+    y2[j]<-mean(tmp2)
+  }
+  
+  deltan<-sum(P*y2)
+  varn<-1/n*sum(P*sigma)^2
+  Iclevel=c(deltan-sqrt(varn/n)*qnorm((1+level)/2),deltan+sqrt(varn/n)*qnorm((1+level)/2))
+  
+  return(list(strates=nk,delta=deltan,var=varn,IC=Iclevel))
+}
+
+p_strat_opt<-p_strat_opti()
+print('Allocations non nulles')
+print(p_strat_opt$strates[which(p_strat_opt$strates!=0)])
+
+p_strat_opt<-c(p_strat_opt$delta,p_strat_opt$var,p_strat_opt$IC[1],p_strat_opt$IC[2])
+result_strat<-matrix(nrow=3,ncol=4)
+result_strat[2:3,]<-result_strat_prop
+result_strat[1,]<-p_strat_opt
+rownames(result_strat)<-c('p par strat. optimales','p par strat. proportionnelle','p par MC classique')
+colnames(result_strat)<-c('p','variance','IC-','IC+')
+print(result_strat)
+# print('Mc stratifie avec allocations optimales:')
+# print(p_strat_opt)
+# print('MC stratifie avec strates proportionnelles:')
+# print(p_strat_prop)
+# print('MC classique')
+# print(p)
+```
+Dans les 2 methodes on a fait en sorte de tirer au final le meme nombre de VA X|S=k (soient 10000) le cout en simulation est donc suppose etre identique.
+Au niveau de la variance: 
+
+-L'allocation optimale a une variance de l'ordre de $10^{-5}$
+
+-L'allocation proportionnelle a une variance de l'ordre de $10^{-3}$
+
+-La methode classique a une variance de l'orde de $10^{-1}$
+
+En terme de variance la methode avec allocation optimale domine la methode avec allocation proportionnelle qui domine le MC classique.
+
+Neanmoins, en prenant en compte la qualite d'estimation on peut s'interroger sur la precision des estimateurs stratifiees car meme si selon l'ordinateur les P(S=k) sont nulles APCR; en realite ils ne le sont pas et si on gagne enormement en efficacite on perd en precision d'estimation.
+
+Une solution pourrait etre d'augmenter le nombre de strates (jusque 150 ou 200) quitte a declarer les P(S=k) non plus en float ou en double mais en big float (mais on risque du coup de perdre beaucoup en efficacite relative pour une estimation pas forcement bien meilleure).
+
+On remarque enfin en regardant le vecteur nk (le nombre de tirages par strates): toutes les strates ont un nombre de tirages a effectuer de 0 (comme prevu les ecarts-types sont tous nuls assez vite)
